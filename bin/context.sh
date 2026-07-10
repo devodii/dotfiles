@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+# Function to compress image using whatever tool is available
+compress_image_to_b64() {
+    local input_file="$1"
+    local target_kb="$2"
+    local ext="${input_file##*.}"
+    local tmp_img="tmp_compressed.jpg"
+    local b64_out=""
+
+    # 1. TRY IMAGEMAGICK
+    if command -v magick &>/dev/null || command -v convert &>/dev/null; then
+        local cmd="convert"
+        command -v magick &>/dev/null && cmd="magick"
+        $cmd "$input_file" -resize "1024x1024>" -strip -define "jpeg:extent=${target_kb}kb" "$tmp_img" &>/dev/null
+    
+    # 2. TRY PYTHON (Pillow) - Common on Linux
+    elif command -v python3 &>/dev/null && python3 -c "from PIL import Image" &>/dev/null; then
+        python3 - <<EOF
+from PIL import Image
+import os
+img = Image.open("$input_file")
+img = img.convert("RGB")
+img.thumbnail((1024, 1024))
+img.save("$tmp_img", "JPEG", quality=70, optimize=True)
+EOF
+
+    # 3. TRY NODE (If sharp is in current node_modules)
+    elif command -v node &>/dev/null && [ -d "./node_modules/sharp" ]; then
+        node -e "
+const sharp = require('sharp');
+sharp('$input_file')
+  .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+  .jpeg({ quality: 70 })
+  .toFile('$tmp_img').catch(() => {});
+" &>/dev/null
+    fi
+
+    # 4. ENCODE TO BASE64 (Handles Mac vs Linux syntax)
+    if [ -f "$tmp_img" ]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            b64_out=$(base64 -i "$tmp_img")
+        else
+            b64_out=$(base64 -w 0 "$tmp_img")
+        fi
+        echo "data:image/jpeg;base64,$b64_out"
+        rm "$tmp_img"
+    else
+        # Fallback: if no tools, only return raw if file is small (< 100kb)
+        local size
+        if [[ "$OSTYPE" == "darwin"* ]]; then size=$(stat -f%z "$input_file"); else size=$(stat -c%s "$input_file"); fi
+        
+        if [ "$size" -lt 102400 ]; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then b64_out=$(base64 -i "$input_file"); else b64_out=$(base64 -w 0 "$input_file"); fi
+            echo "data:image/$ext;base64,$b64_out"
+        else
+            echo "IMAGE_TOO_LARGE_NO_TOOLS"
+        fi
+    fi
+}
+
+context() {
+  local extensions="ts,tsx,js,jsx,json,md,py,html,css,png,jpg,jpeg,webp"
+  local output="codebase_context.md"
+  local root="."
+  local save=0
+  local exclude_input=""
+  local target_kb=50
+
+  # Common noise folders
+  local skip='node_modules|dist|build|\.next|\.git|\.turbo|coverage|\.cache|\.pnpm-store|vendor|__pycache__|\.venv|target|package-lock\.json|yarn\.lock|pnpm-lock\.json'
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --output|-o) output="$2"; shift 2 ;;
+      --exclude|-x) exclude_input="$2"; shift 2 ;;
+      --save|-s) save=1; shift ;;
+      --root|-r) root="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  cd "$root" || return 1
+  [[ -n "$exclude_input" ]] && skip="${skip}|${exclude_input//,/|}"
+
+  local files
+  files=$(find . -type f | grep -E "\\.(${extensions//,/|})$" | grep -Ev "(${skip})")
+
+  if [[ "$save" -eq 0 ]]; then
+    echo "Files found:"
+    echo "$files"
+    return 0
+  fi
+
+  {
+    echo "# Codebase Context"
+    echo -e "\n## Project Map\n"
+    echo '```text'
+    find . -maxdepth 3 -not -path '*/.*' | grep -Ev "(${skip})" | sed -e 's;[^/]*/;|____;g;s;____|; |;g'
+    echo '```'
+
+    for file in $files; do
+      rel_path=${file#./}
+      ext="${rel_path##*.}"
+      echo "Processing: $rel_path" >&2
+      echo "<file path=\"$rel_path\">"
+
+      if [[ "$ext" =~ ^(png|jpg|jpeg|webp)$ ]]; then
+        res=$(compress_image_to_b64 "$file" "$target_kb")
+        if [ "$res" == "IMAGE_TOO_LARGE_NO_TOOLS" ]; then
+            echo "> [!ERROR]"
+            echo "> $rel_path is too large and no compression tools (Magick/Python/Sharp) were found."
+        else
+            echo "![Image: $rel_path]($res)"
+        fi
+      else
+        if grep -Iq . "$file"; then
+          echo '```'${ext}
+          cat "$file"
+          echo -e '\n```'
+        else
+          echo "[Binary file skipped]"
+        fi
+      fi
+      echo -e "</file>\n"
+    done
+  } > "$output"
+
+  # Size summary (Cross-platform)
+  local total_size
+  if [[ "$OSTYPE" == "darwin"* ]]; then total_size=$(stat -f%z "$output"); else total_size=$(stat -c%s "$output"); fi
+  echo "Done. Created $output ($((total_size / 1024)) KB)"
+}
+
+context "$@"
