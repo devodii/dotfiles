@@ -72,6 +72,7 @@ context() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --extensions|--extension|-e) extensions="$2"; shift 2 ;;
       --output|-o) output="$2"; shift 2 ;;
       --exclude|-x) exclude_input="$2"; shift 2 ;;
       --save|-s) save=1; shift ;;
