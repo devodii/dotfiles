@@ -4,8 +4,24 @@ Personal dev setup.
 
 ## Install (new machine)
 
-git clone https://github.com/devodii/dotfiles.git ~/dotfiles
-cd ~/dotfiles && ./install.sh
+```bash
+git clone https://github.com/devodii/dotfiles.git ~/Desktop/dotfiles
+cd ~/Desktop/dotfiles && ./install.sh
+```
+
+This adds one bootstrap line to `~/.zshrc` that sources dotfiles. Everything else lives in this repo.
+
+## How tools are registered
+
+| Location           | What goes there                      | How it works                            |
+| ------------------ | ------------------------------------ | --------------------------------------- |
+| `bin/`             | CLI scripts                          | Auto on PATH — no `.zshrc` edits needed |
+| `zsh/functions/`   | Shell functions that must be sourced | Auto sourced via `dotfiles.zsh`         |
+| `zsh/dotfiles.zsh` | Bootstrap (PATH, auto-load)          | Single source of truth                  |
+
+Add a new CLI tool: drop an executable in `bin/`. Done.
+
+Add a shell function: create `zsh/functions/myfunc.zsh`. Done.
 
 ## Tools
 

@@ -2,16 +2,23 @@
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
+MARKER="# dotfiles bootstrap"
+ZSHRC="${ZSHRC:-$HOME/.zshrc}"
 
-# Symlink configs
-ln -sf "$DOTFILES/zsh/zshrc" "$HOME/.zshrc"
-ln -sf "$DOTFILES/git/gitconfig" "$HOME/.gitconfig"
+touch "$ZSHRC"
 
-# Adds bin to PATH (once)
-grep -q 'dotfiles/bin' "$HOME/.zshrc" || cat >> "$HOME/.zshrc" <<'EOF'
+if grep -q "$MARKER" "$ZSHRC"; then
+  # Update path in case repo was moved
+  sed -i '' "s|source \".*/zsh/dotfiles.zsh\"|source \"$DOTFILES/zsh/dotfiles.zsh\"|" "$ZSHRC"
+else
+  cat >> "$ZSHRC" <<EOF
 
-# dotfiles
-export PATH="$HOME/dotfiles/bin:$PATH"
+$MARKER
+[[ -f "$DOTFILES/zsh/dotfiles.zsh" ]] && source "$DOTFILES/zsh/dotfiles.zsh"
 EOF
+fi
 
-echo "Done. Restart shell or: source ~/.zshrc"
+chmod +x "$DOTFILES"/bin/* 2>/dev/null || true
+
+echo "Dotfiles installed from $DOTFILES"
+echo "Restart shell or run: source \"$ZSHRC\""
