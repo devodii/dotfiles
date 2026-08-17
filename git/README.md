@@ -22,19 +22,19 @@ to add another repo:
   2. add a matching `includeIf` block to `~/.gitconfig`, pointed at that
      directory (trailing slash matters)
 
-## 2. `gcp` - interactive author + coauthor picker
+## 2. `gcid` - interactive author + coauthor picker
 
-a zsh function in `zsh/functions/gcp.zsh`, auto-loaded by the dotfiles
+a zsh function in `zsh/functions/gcid.zsh`, auto-loaded by the dotfiles
 bootstrap. works in any git repo, not just the ones with an `includeIf`
 block above.
 
 workflow:
 
     git add <files>
-    gcp
+    gcid
 
-`gcp` replaces `git commit`, not `git add` - stage your changes first
-like normal, then run `gcp` instead of `git commit`. it will:
+`gcid` replaces `git commit`, not `git add` - stage your changes first
+like normal, then run `gcid` instead of `git commit`. it will:
   1. list identities and ask which one to author the commit as
      (defaults to whatever `git config user.name`/`user.email` already
      resolve to - so inside stellar-docs that's `payroutes` by default)
@@ -43,13 +43,13 @@ like normal, then run `gcp` instead of `git commit`. it will:
   4. run the commit with `-c user.name=... -c user.email=...` so it
      never touches your global/repo git config
 
-run `gcp --help` for this same summary from the shell.
+run `gcid --help` for this same summary from the shell.
 
 identities live in `git/identities`, one `Name|email` per line. edit
-that file directly to add/remove people - no reload needed, `gcp`
+that file directly to add/remove people - no reload needed, `gcid`
 re-reads it every run.
 
-## what identity + `gcp` does NOT do
+## what identity + `gcid` does NOT do
 
 setting `user.name`/`user.email` only changes commit metadata. it has
 no effect on which github account you push/authenticate as - that's

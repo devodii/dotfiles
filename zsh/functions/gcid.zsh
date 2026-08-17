@@ -2,19 +2,19 @@
 # Identities live in $DOTFILES/git/identities as "Name|email" lines, one per line.
 # Requires fzf (brew install fzf).
 
-gcp() {
+gcid() {
   emulate -L zsh
 
   if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     cat <<'EOF'
-gcp - interactive git commit with author + coauthor picker
+gcid - interactive git commit with author + coauthor picker
 
 usage:
   git add <files>
-  gcp
+  gcid
 
-gcp replaces 'git commit', not 'git add' - stage your changes first
-like normal, then run gcp instead of 'git commit'. it will:
+gcid replaces 'git commit', not 'git add' - stage your changes first
+like normal, then run gcid instead of 'git commit'. it will:
   1. let you pick which identity to author the commit as
      (arrow keys + enter, fzf menu)
   2. let you pick which identities to add as Co-authored-by trailers
@@ -35,18 +35,18 @@ EOF
   fi
 
   if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-    echo "gcp: not inside a git repository" >&2
+    echo "gcid: not inside a git repository" >&2
     return 1
   fi
 
   if ! command -v fzf &>/dev/null; then
-    echo "gcp: requires fzf (brew install fzf)" >&2
+    echo "gcid: requires fzf (brew install fzf)" >&2
     return 1
   fi
 
   local idfile="$DOTFILES/git/identities"
   if [[ ! -f "$idfile" ]]; then
-    echo "gcp: no identities file at $idfile" >&2
+    echo "gcid: no identities file at $idfile" >&2
     return 1
   fi
 
@@ -73,7 +73,7 @@ EOF
   author_disp=$(print -l -- "$cur_disp" "${disp_order[@]}" \
     | fzf --prompt="author> " --height=~50% --reverse --header="pick commit author")
   if [[ -z "$author_disp" ]]; then
-    echo "gcp: no author selected, aborting" >&2
+    echo "gcid: no author selected, aborting" >&2
     return 1
   fi
   local author_name=${disp2name[$author_disp]}
@@ -103,7 +103,7 @@ EOF
   local msg
   read "msg?Commit message: "
   if [[ -z "$msg" ]]; then
-    echo "gcp: empty message, aborting" >&2
+    echo "gcid: empty message, aborting" >&2
     return 1
   fi
 
