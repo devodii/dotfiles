@@ -1,0 +1,8 @@
+[user]
+	name = odii-spirittech
+	email = emmanuel.odii@spiritech.io
+	signingkey = ~/.ssh/id_ed25519_spirittech.pub
+[gpg]
+	format = ssh
+[commit]
+	gpgsign = true

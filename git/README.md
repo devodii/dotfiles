@@ -49,11 +49,59 @@ identities live in `git/identities`, one `Name|email` per line. edit
 that file directly to add/remove people - no reload needed, `gcp`
 re-reads it every run.
 
-## what this does NOT do
+## what identity + `gcp` does NOT do
 
 setting `user.name`/`user.email` only changes commit metadata. it has
 no effect on which github account you push/authenticate as - that's
-determined by the ssh key used for the `git@github.com` remote. pushing
-as a different github account (e.g. a second company account) needs a
-separate ssh key + ssh config host alias, not covered by the identity
-switch above.
+determined by the ssh key used for the remote. pushing as a different
+github account needs a separate ssh key + ssh config host alias, plus
+the remote url pointed at that host alias instead of `github.com`. see
+below for the worked example.
+
+## 3. pushing/signing as a second github account
+
+worked example: `~/Desktop/work/spirit-technologies/` pushes and signs
+as the `odii-spirittech` github account, separate from the personal
+account used everywhere else.
+
+what's involved, end to end:
+
+1. a dedicated ssh key: `~/.ssh/id_ed25519_spirittech`
+2. a host alias in `~/.ssh/config` so git can pick that key without
+   touching the default `github.com` entry:
+
+       Host github-spirittech
+           HostName github.com
+           User git
+           IdentityFile ~/.ssh/id_ed25519_spirittech
+           IdentitiesOnly yes
+
+3. every remote under that folder uses the alias instead of
+   `github.com`, e.g.:
+
+       git@github-spirittech:spirit-technologies-oy/poc-web-testing.git
+
+   (`git remote set-url origin ...` on existing clones, or clone new
+   ones directly with the alias in the url)
+4. the usual `includeIf` block (see section 1) additionally sets
+   commit signing, since this account signs commits:
+
+       [user]
+           name = odii-spirittech
+           email = emmanuel.odii@spiritech.io
+           signingkey = ~/.ssh/id_ed25519_spirittech.pub
+       [gpg]
+           format = ssh
+       [commit]
+           gpgsign = true
+
+5. one-time, on github.com, under the `odii-spirittech` account ->
+   Settings -> SSH and GPG keys -> New SSH key: paste
+   `~/.ssh/id_ed25519_spirittech.pub` twice, once as key type
+   "Authentication Key" (needed to push at all) and once as
+   "Signing Key" (needed for the verified badge). also make sure that
+   account is actually a member with write access to whatever org the
+   repo belongs to - a valid key alone doesn't grant access.
+
+to set this up for a third account later, repeat steps 1-5 with a new
+key name, host alias, folder, and `config-<name>` file.
