@@ -4,6 +4,31 @@
 gcp() {
   emulate -L zsh
 
+  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    cat <<'EOF'
+gcp - interactive git commit with author + coauthor picker
+
+usage:
+  git add <files>
+  gcp
+
+gcp replaces 'git commit', not 'git add' - stage your changes first
+like normal, then run gcp instead of 'git commit'. it will:
+  1. ask which identity to author the commit as
+  2. ask which identities to add as Co-authored-by trailers
+  3. ask for the commit message
+  4. commit with those set via -c user.name/-c user.email, without
+     touching your global or repo git config
+
+identities come from $DOTFILES/git/identities (one "Name|email" per
+line) - edit that file to add/remove people, no reload needed.
+
+see $DOTFILES/git/README.md for the full setup, including how to make
+a repo default to a given identity automatically.
+EOF
+    return 0
+  fi
+
   if ! git rev-parse --is-inside-work-tree &>/dev/null; then
     echo "gcp: not inside a git repository" >&2
     return 1
