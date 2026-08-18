@@ -105,3 +105,38 @@ what's involved, end to end:
 
 to set this up for a third account later, repeat steps 1-5 with a new
 key name, host alias, folder, and `config-<name>` file.
+
+## 4. `ghid` - switch which account `gh` (GitHub CLI) uses
+
+sections 1-3 above only cover git commit metadata and git's own
+push/signing auth. `gh` (`gh pr`, `gh repo create`, `gh api`, etc.) is
+a separate auth layer with its own login, so it needs its own account
+switch.
+
+`gh` supports being logged into multiple accounts at once
+(`gh auth login`, once per account - browser flow, do this yourself,
+never paste a token into a chat/agent), but only one is "active" per
+host at a time, and that's global for the whole machine - unlike
+git's `includeIf`, there's no per-directory auto-switching for `gh`.
+
+`zsh/functions/ghid.zsh` is a small fzf picker over whatever accounts
+`gh auth status` reports, so you don't have to remember account names
+or the raw `gh auth switch` flags:
+
+    ghid
+
+run `ghid --help` for the same summary from the shell. under the hood
+it just runs:
+
+    gh auth switch --hostname github.com --user <picked>
+
+after that, every `gh` command acts as that account until you run
+`ghid` again (or `gh auth status` to check without switching).
+
+this has been verified end to end: switched to `odii-spirittech`,
+created a repo in its org with `gh repo create`, cloned it into
+`~/Desktop/work/spirit-technologies/` (picks up the `includeIf`
+identity from section 3 automatically), committed with a
+`Co-authored-by: devodii <...>` trailer, and confirmed on github that
+the commit shows both `odii-spirittech` as author and `devodii` as a
+recognized coauthor.
