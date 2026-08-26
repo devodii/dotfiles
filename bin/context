@@ -84,13 +84,40 @@ context() {
   cd "$root" || return 1
   [[ -n "$exclude_input" ]] && skip="${skip}|${exclude_input//,/|}"
 
+  # Never overwrite an existing context file: fall back to <name>_copy_N.<ext>
+  local out_dir out_name out_base out_ext
+  out_dir=$(dirname "$output")
+  out_name=$(basename "$output")
+  if [[ "$out_name" == *.* ]]; then
+    out_base="${out_name%.*}"
+    out_ext=".${out_name##*.}"
+  else
+    out_base="$out_name"
+    out_ext=""
+  fi
+
+  # Exclude previously generated context files from the scan. Without this the
+  # dump reads itself back through the open redirect and grows without bound.
   local files
-  files=$(find . -type f | grep -E "\\.(${extensions//,/|})$" | grep -Ev "(${skip})")
+  files=$(find . -type f ! -name "${out_base}*${out_ext}" \
+    | grep -E "\\.(${extensions//,/|})$" | grep -Ev "(${skip})")
 
   if [[ "$save" -eq 0 ]]; then
     echo "Files found:"
     echo "$files"
     return 0
+  fi
+
+  local out_prefix="${out_dir}/"
+  [[ "$out_dir" == "." ]] && out_prefix=""
+
+  if [[ -e "$output" ]]; then
+    local n=1
+    while [[ -e "${out_prefix}${out_base}_copy_${n}${out_ext}" ]]; do
+      n=$((n + 1))
+    done
+    output="${out_prefix}${out_base}_copy_${n}${out_ext}"
+    echo "Existing context file found. Writing to $output instead." >&2
   fi
 
   {
@@ -100,7 +127,8 @@ context() {
     find . -maxdepth 3 -not -path '*/.*' | grep -Ev "(${skip})" | sed -e 's;[^/]*/;|____;g;s;____|; |;g'
     echo '```'
 
-    for file in $files; do
+    while IFS= read -r file; do
+      [[ -n "$file" ]] || continue
       rel_path=${file#./}
       ext="${rel_path##*.}"
       echo "Processing: $rel_path" >&2
@@ -124,7 +152,7 @@ context() {
         fi
       fi
       echo -e "</file>\n"
-    done
+    done <<< "$files"
   } > "$output"
 
   # Size summary (Cross-platform)
