@@ -59,6 +59,34 @@ sharp('$input_file')
     fi
 }
 
+trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
+}
+
+# Convert a gitignore-style glob to ERE. Caller must not pass an empty string.
+glob_to_re() {
+  local line="$1"
+  line="${line//./\\.}"
+  line="${line//\*\*/.*}"
+  line="${line//\*/[^/]*}"
+  printf '%s' "$line"
+}
+
+dir_to_re() {
+  local d="$1"
+  d="${d#./}"
+  # Use a character class so the leading dot is literal. `printf '\\.'` double-escapes
+  # on bash 3.2 and the skip regex then looks for a backslash that is not in the path.
+  if [[ -z "$d" || "$d" == "." ]]; then
+    printf '%s' '[.]'
+    return
+  fi
+  printf '%s' "[.]/$(glob_to_re "$d")"
+}
+
 context() {
   local extensions="ts,tsx,js,jsx,json,md,py,html,css,png,jpg,jpeg,webp"
   local output="codebase_context.md"
@@ -67,37 +95,85 @@ context() {
   local exclude_input=""
   local target_kb=50
 
-  # Common noise folders
-  local skip='node_modules|dist|build|\.next|\.git|\.turbo|coverage|\.cache|\.pnpm-store|vendor|__pycache__|\.venv|target|package-lock\.json|yarn\.lock|pnpm-lock\.json'
+  # Common noise folders. Directory names here are also pruned from find.
+  local skip='node_modules|dist|build|\.next|\.git|\.turbo|coverage|\.cache|\.pnpm-store|vendor|__pycache__|\.venv|target|\.pytest_cache|\.ruff_cache|package-lock\.json|yarn\.lock|pnpm-lock\.json'
+  local -a prune_names=(
+    node_modules dist build .next .git .turbo coverage .cache .pnpm-store
+    vendor __pycache__ .venv target .pytest_cache .ruff_cache
+  )
+
+  append_skip() {
+    local pat="$1"
+    [[ -z "$pat" ]] && return
+    skip="${skip}|${pat}"
+  }
+
+  find_pruned() {
+    local -a prune=()
+    local n
+    prune+=( \( )
+    for n in "${prune_names[@]}"; do
+      [[ ${#prune[@]} -eq 1 ]] || prune+=( -o )
+      prune+=( -name "$n" )
+    done
+    prune+=( \) -prune -o )
+    find . "${prune[@]}" "$@"
+  }
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --extensions|--extension|-e) extensions="$2"; shift 2 ;;
       --output|-o) output="$2"; shift 2 ;;
-      --exclude|-x) exclude_input="$2"; shift 2 ;;
+      --exclude|-x)
+        exclude_input="${exclude_input:+$exclude_input,}$2"
+        shift 2
+        ;;
       --save|-s) save=1; shift ;;
       --root|-r) root="$2"; shift 2 ;;
-      *) shift ;;
+      -*) shift ;;
+      *)
+        # Allow `-x foo, bar` (space after comma) to still collect `bar`.
+        exclude_input="${exclude_input:+$exclude_input,}$1"
+        shift
+        ;;
     esac
   done
 
   cd "$root" || return 1
-  [[ -n "$exclude_input" ]] && skip="${skip}|${exclude_input//,/|}"
 
+  local extra item
+  IFS=',' read -ra extra <<< "$exclude_input"
+  for item in "${extra[@]}"; do
+    item="$(trim "$item")"
+    item="${item#./}"
+    item="${item#/}"
+    item="${item%/}"
+    [[ -z "$item" ]] && continue
+    prune_names+=("$item")
+    append_skip "$(glob_to_re "$item")"
+  done
+
+  local gi gi_dir dir_re line pat
   while IFS= read -r gi; do
+    [[ -z "$gi" ]] && continue
+    dir_re="$(dir_to_re "$(dirname "$gi")")"
     while IFS= read -r line || [[ -n "$line" ]]; do
       line="${line%%#*}"
-      line="${line#"${line%%[![:space:]]*}"}"
-      line="${line%"${line##*[![:space:]]}"}"
+      line="$(trim "$line")"
       [[ -z "$line" || "$line" == !* ]] && continue
       line="${line#/}"
       line="${line%/}"
-      line="${line//./\\.}"
-      line="${line//\*\*/.*}"
-      line="${line//\*/[^/]*}"
-      skip="${skip}|${line}"
+      [[ -z "$line" ]] && continue
+      pat="$(glob_to_re "$line")"
+      [[ -z "$pat" ]] && continue
+      if [[ "$line" == */* ]]; then
+        append_skip "${dir_re}/${pat}"
+      else
+        # A nameless glob like `*` in dir/.gitignore applies under dir/, not globally.
+        append_skip "${dir_re}/(.*/)?${pat}"
+      fi
     done < "$gi"
-  done < <(find . -name .gitignore -type f 2>/dev/null)
+  done < <(find_pruned -name .gitignore -type f -print 2>/dev/null)
 
   # Never overwrite an existing context file: fall back to <name>_copy_N.<ext>
   local out_dir out_name out_base out_ext
@@ -114,7 +190,7 @@ context() {
   # Exclude previously generated context files from the scan. Without this the
   # dump reads itself back through the open redirect and grows without bound.
   local files
-  files=$(find . -type f ! -name "${out_base}*${out_ext}" \
+  files=$(find_pruned -type f ! -name "${out_base}*${out_ext}" -print \
     | grep -E "\\.(${extensions//,/|})$" | grep -Ev "(${skip})")
 
   if [[ "$save" -eq 0 ]]; then
