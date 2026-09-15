@@ -84,6 +84,21 @@ context() {
   cd "$root" || return 1
   [[ -n "$exclude_input" ]] && skip="${skip}|${exclude_input//,/|}"
 
+  while IFS= read -r gi; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line="${line%%#*}"
+      line="${line#"${line%%[![:space:]]*}"}"
+      line="${line%"${line##*[![:space:]]}"}"
+      [[ -z "$line" || "$line" == !* ]] && continue
+      line="${line#/}"
+      line="${line%/}"
+      line="${line//./\\.}"
+      line="${line//\*\*/.*}"
+      line="${line//\*/[^/]*}"
+      skip="${skip}|${line}"
+    done < "$gi"
+  done < <(find . -name .gitignore -type f 2>/dev/null)
+
   # Never overwrite an existing context file: fall back to <name>_copy_N.<ext>
   local out_dir out_name out_base out_ext
   out_dir=$(dirname "$output")
