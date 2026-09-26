@@ -1,3 +1,8 @@
+---
+name: justin-welsh
+description: Use when writing a LinkedIn or social post in Justin Welsh's style. Mobile-first one-sentence-per-line format, plain-English no-jargon tone, no em dashes, and a short story-to-business pivot.
+---
+
 ## Chunk 1: The Visual & Narrative Architecture
 
 The Layout (Mobile-First)
