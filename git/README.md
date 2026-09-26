@@ -22,43 +22,14 @@ to add another repo:
   2. add a matching `includeIf` block to `~/.gitconfig`, pointed at that
      directory (trailing slash matters)
 
-## 2. `gcid` - interactive author + coauthor picker
-
-a zsh function in `zsh/functions/gcid.zsh`, auto-loaded by the dotfiles
-bootstrap. works in any git repo, not just the ones with an `includeIf`
-block above.
-
-workflow:
-
-    git add <files>
-    gcid
-
-`gcid` replaces `git commit`, not `git add` - stage your changes first
-like normal, then run `gcid` instead of `git commit`. it will:
-  1. list identities and ask which one to author the commit as
-     (defaults to whatever `git config user.name`/`user.email` already
-     resolve to - so inside stellar-docs that's `payroutes` by default)
-  2. ask which identities (if any) to add as `Co-authored-by:` trailers
-  3. ask for the commit message
-  4. run the commit with `-c user.name=... -c user.email=...` so it
-     never touches your global/repo git config
-
-run `gcid --help` for this same summary from the shell.
-
-identities live in `git/identities`, one `Name|email` per line. edit
-that file directly to add/remove people - no reload needed, `gcid`
-re-reads it every run.
-
-## what identity + `gcid` does NOT do
+## what per-repo identity does NOT do
 
 setting `user.name`/`user.email` only changes commit metadata. it has
-no effect on which github account you push/authenticate as - that's
-determined by the ssh key used for the remote. pushing as a different
-github account needs a separate ssh key + ssh config host alias, plus
-the remote url pointed at that host alias instead of `github.com`. see
-below for the worked example.
+no effect on which github account you push/authenticate as - that's a
+separate layer (ssh key, or `gh`'s credential helper - see sections
+2 and 3 below).
 
-## 3. pushing/signing as a second github account
+## 2. pushing/signing as a second github account
 
 worked example: `~/Desktop/work/spirit-technologies/` pushes and signs
 as the `odii-spirittech` github account, separate from the personal
@@ -106,12 +77,15 @@ what's involved, end to end:
 to set this up for a third account later, repeat steps 1-5 with a new
 key name, host alias, folder, and `config-<name>` file.
 
-## 4. `ghid` - switch which account `gh` (GitHub CLI) uses
+note: this ssh-alias approach is one way to authenticate as a second
+account. for `clone`/`push`/`pull` specifically, switching `gh`'s
+active account (section 3) is usually simpler, since it needs no
+per-repo url rewriting - see the note at the end of section 3.
 
-sections 1-3 above only cover git commit metadata and git's own
-push/signing auth. `gh` (`gh pr`, `gh repo create`, `gh api`, etc.) is
-a separate auth layer with its own login, so it needs its own account
-switch.
+## 3. `ghid` - switch which account `gh` (GitHub CLI) uses, incl. git auth
+
+`gh` (`gh pr`, `gh repo create`, `gh api`, etc.) has its own login,
+separate from section 1's commit metadata and section 2's ssh keys.
 
 `gh` supports being logged into multiple accounts at once
 (`gh auth login`, once per account - browser flow, do this yourself,
@@ -133,10 +107,29 @@ it just runs:
 after that, every `gh` command acts as that account until you run
 `ghid` again (or `gh auth status` to check without switching).
 
+**this also covers plain `git clone`/`push`/`pull` over https**, no ssh
+alias needed: `~/.gitconfig` has
+
+    [credential "https://github.com"]
+        helper = !gh auth git-credential
+
+so any git operation that needs an https credential for github.com
+shells out to `gh`, which hands over a token for whichever account
+`gh auth switch` (or `ghid`) last made active. workflow for cloning as
+a second account:
+
+    ghid                                              # pick the account
+    gh repo clone <owner>/<repo>                      # or: git clone https://github.com/<owner>/<repo>.git
+
+(`gh repo clone` reads `gh config get git_protocol` to decide
+http vs ssh - `https` here, so it always goes through the credential
+helper above.) this only affects the *transport auth* for
+clone/push/pull; commit author metadata still comes from section 1's
+`includeIf`, and if the account also signs commits, section 2's ssh
+key + `config-<name>` setup still applies for that.
+
 this has been verified end to end: switched to `odii-spirittech`,
 created a repo in its org with `gh repo create`, cloned it into
 `~/Desktop/work/spirit-technologies/` (picks up the `includeIf`
-identity from section 3 automatically), committed with a
-`Co-authored-by: devodii <...>` trailer, and confirmed on github that
-the commit shows both `odii-spirittech` as author and `devodii` as a
-recognized coauthor.
+identity from section 1 automatically), committed, and confirmed on
+github that the commit shows `odii-spirittech` as author.
