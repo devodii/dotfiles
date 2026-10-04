@@ -161,12 +161,16 @@ context() {
       line="${line%%#*}"
       line="$(trim "$line")"
       [[ -z "$line" || "$line" == !* ]] && continue
+      local anchored=0
+      [[ "$line" == /* ]] && anchored=1
       line="${line#/}"
       line="${line%/}"
       [[ -z "$line" ]] && continue
       pat="$(glob_to_re "$line")"
       [[ -z "$pat" ]] && continue
-      if [[ "$line" == */* ]]; then
+      if [[ "$anchored" -eq 1 || "$line" == */* ]]; then
+        # A leading-slash pattern (e.g. `/output/`) or one with an internal
+        # slash is anchored to the .gitignore's directory, not recursive.
         append_skip "${dir_re}/${pat}"
       else
         # A nameless glob like `*` in dir/.gitignore applies under dir/, not globally.
