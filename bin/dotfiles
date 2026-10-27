@@ -37,3 +37,39 @@ for skill in "$DOTFILES"/.claude/skills/*/; do
 done
 
 echo "Synced skills from $DOTFILES"
+
+CLAUDE_HOOKS_DIR="$HOME/.claude/hooks"
+mkdir -p "$CLAUDE_HOOKS_DIR"
+for hook in "$DOTFILES"/.claude/hooks/*; do
+  [ -f "$hook" ] || continue
+  target="$CLAUDE_HOOKS_DIR/$(basename "$hook")"
+  [ -L "$target" ] && [ "$(readlink "$target")" = "$hook" ] && continue
+  rm -f "$target"
+  ln -s "$hook" "$target"
+  echo "Linked hook: $(basename "$hook")"
+done
+
+python3 - "$HOME/.claude/settings.json" <<'PY'
+import json, os, sys
+
+path = sys.argv[1]
+settings = json.load(open(path)) if os.path.exists(path) else {}
+hook = '~/.claude/hooks/slow-commands.py'
+wanted = {'PreToolUse': f'{hook} start', 'PostToolUse': f'{hook} end', 'PostToolUseFailure': f'{hook} end'}
+hooks = settings.setdefault('hooks', {})
+changed = False
+for event, command in wanted.items():
+    entries = hooks.setdefault(event, [])
+    for entry in entries:
+        for h in entry.get('hooks', []):
+            if 'slow-commands' in h.get('command', '') and h['command'] != command:
+                h['command'] = command
+                changed = True
+    if any(h.get('command') == command for e in entries for h in e.get('hooks', [])):
+        continue
+    entries.append({'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': command, 'timeout': 10}]})
+    changed = True
+if changed:
+    json.dump(settings, open(path, 'w'), indent=2)
+    print('Registered slow command hook in', path)
+PY

@@ -21,6 +21,7 @@ After the first install, open a new shell and use `dotfiles` directly from anywh
 | `zsh/functions/`    | Shell functions that must be sourced | Auto sourced via `dotfiles.zsh`              |
 | `zsh/dotfiles.zsh`  | Bootstrap (PATH, auto-load)          | Single source of truth                       |
 | `.claude/skills/`   | Claude Code skills                   | Symlinked into `~/.claude/skills/` on install |
+| `.claude/hooks/`    | Claude Code hooks                    | Symlinked into `~/.claude/hooks/` and registered in `~/.claude/settings.json` on install |
 
 Add a new CLI tool: drop an executable in `bin/`. Done.
 
@@ -51,3 +52,13 @@ Options:
 -r DIR project root
 -s write to disk
 -x files/folders to omit.
+
+### slow commands — find what eats Claude Code's time
+
+Every Bash command Claude Code runs for 15 seconds or more is logged to `tmp/claude-slow-commands/` in the project it ran in, one file per hour:
+
+```
+tmp/claude-slow-commands/2026-10-27_14.log
+```
+
+Each entry has the time, how long it took, its description, the folder and the command. `tmp/` is added to the repo's local git exclude, so the logs are never committed. Installed by `dotfiles` (needs `python3`). Turn it off from `/hooks` in Claude Code.
